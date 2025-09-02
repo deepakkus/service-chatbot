@@ -8,7 +8,29 @@ let db: mysql.Pool | null = null;
 
 async function getDB() {
   if (!db) {
-    db = mysql.createPool(process.env.DATABASE_URL!); // ✅ DSN string supported
+    // Log the database connection details (without sensitive info)
+    console.log("Database connection details:");
+    console.log("DATABASE_URL:", process.env.DATABASE_URL ? "***SET***" : "***NOT SET***");
+    
+    if (process.env.DATABASE_URL) {
+      // Use DATABASE_URL (standard for Vercel)
+      db = mysql.createPool(process.env.DATABASE_URL);
+      console.log("Using DATABASE_URL connection");
+    } else {
+      // Fallback to individual variables (for local development)
+      console.log("DATABASE_URL not found, using individual variables");
+      console.log("DB_HOST:", process.env.DB_HOST);
+      console.log("DB_USER:", process.env.DB_USER ? "***SET***" : "***NOT SET***");
+      console.log("DB_PASS:", process.env.DB_PASS ? "***SET***" : "***NOT SET***");
+      console.log("DB_NAME:", process.env.DB_NAME);
+      
+      db = mysql.createPool({
+        host: process.env.DB_HOST,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASS,
+        database: process.env.DB_NAME,
+      });
+    }
   }
   return db;
 }
