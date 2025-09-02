@@ -47,7 +47,7 @@ async function detectIntent(query: string, db: mysql.Pool) {
     }
     
     return { intent: 'general', response: null, contextType: 'general' };
-  } catch (error) {
+  } catch {
     // Fallback to simple keyword detection
     return detectSimpleIntent(query);
   }
@@ -142,7 +142,7 @@ async function handleServiceQuery(query: string, db: mysql.Pool) {
       
       return `We offer the following software development services:\n${categoryList}\n\nWhat type of project do you have in mind? I can help you get a quote.`;
     }
-  } catch (error) {
+  } catch {
     console.log("Enhanced service tables not available, using fallback");
   }
   
@@ -186,7 +186,7 @@ async function handleJobQuery(query: string, db: mysql.Pool) {
       }
 
       let whereClause = "WHERE j.is_active = TRUE";
-      let params: (string | number)[] = [];
+      const params: (string | number)[] = [];
       
       if (jobCategory) {
         whereClause += " AND c.name = ?";
@@ -230,7 +230,7 @@ async function handleJobQuery(query: string, db: mysql.Pool) {
         return `Here are some job opportunities that match your search:\n\n${jobList}\n\nWould you like to apply for any of these positions or get more details?`;
       }
     }
-  } catch (error) {
+  } catch {
     console.log("Enhanced job tables not available, using fallback");
   }
   
@@ -282,7 +282,7 @@ async function handlePricingQuery(query: string, db: mysql.Pool) {
       
       return `Our Service Pricing:\n${pricingList}\n\nWe offer flexible pricing models including hourly, fixed, and subscription plans. For a custom quote, please describe your project requirements.`;
     }
-  } catch (error) {
+  } catch {
     console.log("Enhanced service tables not available, using fallback");
   }
   
@@ -343,7 +343,7 @@ export async function POST(req: NextRequest) {
             if ((recentServices as Array<{ name: string; description: string }>).length > 0 || (recentJobs as Array<{ title: string; company_name: string }>).length > 0) {
               contextInfo = `Available services: ${(recentServices as Array<{ name: string; description: string }>).map(s => s.name).join(', ')}. Recent job openings: ${(recentJobs as Array<{ title: string; company_name: string }>).map(j => j.title).join(', ')}.`;
             }
-          } catch (error) {
+          } catch {
             console.log("Could not fetch enhanced context");
           }
           
@@ -365,7 +365,7 @@ Provide a helpful, professional response that guides the user to either our serv
           const aiResponse = await model.generateContent(prompt);
           response = aiResponse.response.text().trim();
         }
-      } catch (error) {
+      } catch {
         // If FAQ search fails, generate AI response
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const prompt = `
@@ -401,7 +401,7 @@ We offer software development services and job placement assistance. Provide a h
             JSON.stringify({ lastQuery: query, intent: intent.intent })
           ]
         );
-      } catch (error) {
+      } catch {
         console.log("Could not store conversation context - table may not exist");
       }
     }
