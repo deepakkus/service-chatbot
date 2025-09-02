@@ -18,6 +18,112 @@ async function getDB() {
   return db;
 }
 
+// Function to ensure essential tables exist
+async function ensureTablesExist(db: mysql.Pool) {
+  try {
+    // Check and create conversation_contexts table
+    const [contextTableCheck] = await db.query("SHOW TABLES LIKE 'conversation_contexts'");
+    if ((contextTableCheck as Array<{ [key: string]: string }>).length === 0) {
+      console.log("Creating conversation_contexts table...");
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS conversation_contexts (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          session_id VARCHAR(100) NOT NULL,
+          user_id INT NULL,
+          context_type ENUM('service_inquiry', 'job_search', 'general_support', 'technical_help') DEFAULT 'general_support',
+          current_topic VARCHAR(200),
+          user_intent VARCHAR(200),
+          conversation_state JSON,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_session_id (session_id),
+          INDEX idx_user_id (user_id)
+        )
+      `);
+    }
+
+    // Check and create intent_patterns table
+    const [intentTableCheck] = await db.query("SHOW TABLES LIKE 'intent_patterns'");
+    if ((intentTableCheck as Array<{ [key: string]: string }>).length === 0) {
+      console.log("Creating intent_patterns table...");
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS intent_patterns (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          intent_name VARCHAR(100) NOT NULL,
+          patterns TEXT NOT NULL,
+          responses TEXT,
+          context_type ENUM('service', 'job', 'general') DEFAULT 'general',
+          priority INT DEFAULT 1,
+          is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      
+      // Insert basic intent patterns
+      await db.query(`
+        INSERT INTO intent_patterns (intent_name, patterns, responses, context_type, priority) VALUES
+        ('service_quote', 'quote|pricing|cost|how much|estimate|budget', 'I can help you get a quote for our services. What type of project are you looking for?', 'service', 1),
+        ('job_search', 'job|career|position|hiring|employment|work', 'I can help you find job opportunities. What type of role are you looking for?', 'job', 1),
+        ('service_inquiry', 'service|development|app|website|software|project', 'I can help you with our software development services. What type of project do you have in mind?', 'service', 1)
+      `);
+    }
+
+    // Check and create service_categories table
+    const [serviceCatTableCheck] = await db.query("SHOW TABLES LIKE 'service_categories'");
+    if ((serviceCatTableCheck as Array<{ [key: string]: string }>).length === 0) {
+      console.log("Creating service_categories table...");
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS service_categories (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          name VARCHAR(100) NOT NULL,
+          description TEXT,
+          icon VARCHAR(50),
+          is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+      
+      // Insert basic service categories
+      await db.query(`
+        INSERT INTO service_categories (name, description, icon) VALUES
+        ('Web Development', 'Custom websites and web applications', 'globe'),
+        ('Mobile Development', 'iOS and Android applications', 'smartphone'),
+        ('Cloud Services', 'AWS, Azure, and Google Cloud solutions', 'cloud'),
+        ('DevOps & CI/CD', 'Automation and deployment pipelines', 'settings')
+      `);
+    }
+
+    // Check and create job_categories table
+    const [jobCatTableCheck] = await db.query("SHOW TABLES LIKE 'job_categories'");
+    if ((jobCatTableCheck as Array<{ [key: string]: string }>).length === 0) {
+      console.log("Creating job_categories table...");
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS job_categories (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          name VARCHAR(100) NOT NULL,
+          description TEXT,
+          is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      
+      // Insert basic job categories
+      await db.query(`
+        INSERT INTO job_categories (name, description) VALUES
+        ('Software Development', 'Full-stack, frontend, and backend development roles'),
+        ('Data Science', 'Data analysis, machine learning, and AI positions'),
+        ('DevOps Engineering', 'Infrastructure, automation, and deployment roles'),
+        ('UI/UX Design', 'User interface and experience design roles')
+      `);
+    }
+
+    console.log("All essential tables verified/created successfully");
+  } catch (err) {
+    console.error("Error ensuring tables exist:", err);
+  }
+}
+
 // Intent recognition function (only if enhanced tables exist)
 async function detectIntent(query: string, db: mysql.Pool) {
   try {
@@ -298,6 +404,9 @@ export async function POST(req: NextRequest) {
     }
 
     const db = await getDB();
+    
+    // Ensure all essential tables exist
+    await ensureTablesExist(db);
     
     // 1. Intent Detection
     const intent = await detectIntent(query, db);
