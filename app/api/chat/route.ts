@@ -477,11 +477,12 @@ Provide a helpful, professional response that guides the user to either our serv
       } catch (err) {
         console.error("Error with conversation context:", err);
         if (err && typeof err === 'object' && 'message' in err) {
+          const errorObj = err as Error & { code?: string; sqlState?: string; sqlMessage?: string };
           console.error("Error details:", {
-            message: (err as any).message,
-            code: (err as any).code,
-            sqlState: (err as any).sqlState,
-            sqlMessage: (err as any).sqlMessage
+            message: errorObj.message,
+            code: errorObj.code,
+            sqlState: errorObj.sqlState,
+            sqlMessage: errorObj.sqlMessage
           });
         }
         // Don't fail the entire request, just log the error
@@ -563,11 +564,12 @@ Provide a helpful, professional response that guides the user to either our serv
       } catch (err) {
         console.error("Error with conversation context:", err);
         if (err && typeof err === 'object' && 'message' in err) {
+          const errorObj = err as Error & { code?: string; sqlState?: string; sqlMessage?: string };
           console.error("Error details:", {
-            message: (err as any).message,
-            code: (err as any).code,
-            sqlState: (err as any).sqlState,
-            sqlMessage: (err as any).sqlMessage
+            message: errorObj.message,
+            code: errorObj.code,
+            sqlState: errorObj.sqlState,
+            sqlMessage: errorObj.sqlMessage
           });
         }
         // Don't fail the entire request, just log the error
