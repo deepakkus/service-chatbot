@@ -474,45 +474,106 @@ Provide a helpful, professional response that guides the user to either our serv
           const aiResponse = await model.generateContent(prompt);
           response = aiResponse.response.text().trim();
         }
-      } catch {
-        // If FAQ search fails, generate AI response
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        const prompt = `
-You are a helpful software services and job search assistant. 
-
-User asked: "${query}"
-
-We offer software development services and job placement assistance. Provide a helpful, professional response that guides the user to either our services or job opportunities based on their query.
-`;
-
-        const aiResponse = await model.generateContent(prompt);
-        response = aiResponse.response.text().trim();
+      } catch (err) {
+        console.error("Error with conversation context:", err);
+        if (err && typeof err === 'object' && 'message' in err) {
+          console.error("Error details:", {
+            message: (err as any).message,
+            code: (err as any).code,
+            sqlState: (err as any).sqlState,
+            sqlMessage: (err as any).sqlMessage
+          });
+        }
+        // Don't fail the entire request, just log the error
       }
     }
 
     // 5. Store conversation context (only if table exists)
     if (sessionId) {
       try {
-        await db.query(
-          `INSERT INTO conversation_contexts (session_id, user_id, context_type, current_topic, user_intent, conversation_state)
-           VALUES (?, ?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE 
-           current_topic = VALUES(current_topic),
-           user_intent = VALUES(user_intent),
-           conversation_state = VALUES(conversation_state),
-           updated_at = CURRENT_TIMESTAMP`,
-          [
-            sessionId,
-            userId || null,
-            intent.contextType,
-            query.substring(0, 200),
-            intent.intent,
-            JSON.stringify({ lastQuery: query, intent: intent.intent })
-          ]
-        );
-      } catch {
-        console.log("Could not store conversation context - table may not exist");
+        console.log(`Attempting to store conversation context for session: ${sessionId}`);
+        console.log(`User ID: ${userId}, Intent: ${intent.intent}, Context Type: ${intent.contextType}`);
+        
+        // First check if the conversation_contexts table exists
+        const [tableCheck] = await db.query("SHOW TABLES LIKE 'conversation_contexts'");
+        console.log(`Table check result:`, tableCheck);
+        
+        if ((tableCheck as Array<{ [key: string]: string }>).length > 0) {
+          console.log("conversation_contexts table exists, attempting to insert data...");
+          
+          // Try to insert the data
+          const insertResult = await db.query(
+            `INSERT INTO conversation_contexts (session_id, user_id, context_type, current_topic, user_intent, conversation_state)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE 
+             current_topic = VALUES(current_topic),
+             user_intent = VALUES(user_intent),
+             conversation_state = VALUES(conversation_state),
+             updated_at = CURRENT_TIMESTAMP`,
+            [
+              sessionId,
+              userId || null,
+              intent.contextType,
+              query.substring(0, 200),
+              intent.intent,
+              JSON.stringify({ lastQuery: query, intent: intent.intent })
+            ]
+          );
+          
+          console.log("Insert result:", insertResult);
+          console.log("Conversation context stored successfully");
+        } else {
+          console.log("conversation_contexts table does not exist, creating it...");
+          // Table doesn't exist, create it
+          await db.query(`
+            CREATE TABLE IF NOT EXISTS conversation_contexts (
+              id INT PRIMARY KEY AUTO_INCREMENT,
+              session_id VARCHAR(100) NOT NULL,
+              user_id INT NULL,
+              context_type ENUM('service_inquiry', 'job_search', 'general_support', 'technical_help') DEFAULT 'general_support',
+              current_topic VARCHAR(200),
+              user_intent VARCHAR(200),
+              conversation_state JSON,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              INDEX idx_session_id (session_id),
+              INDEX idx_user_id (user_id)
+            )
+          `);
+          
+          console.log("Table created, now inserting data...");
+          
+          // Now insert the data
+          const insertResult = await db.query(
+            `INSERT INTO conversation_contexts (session_id, user_id, context_type, current_topic, user_intent, conversation_state)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+              sessionId,
+              userId || null,
+              intent.contextType,
+              query.substring(0, 200),
+              intent.intent,
+              JSON.stringify({ lastQuery: query, intent: intent.intent })
+            ]
+          );
+          
+          console.log("Insert result after table creation:", insertResult);
+          console.log("Conversation context table created and data inserted successfully");
+        }
+      } catch (err) {
+        console.error("Error with conversation context:", err);
+        if (err && typeof err === 'object' && 'message' in err) {
+          console.error("Error details:", {
+            message: (err as any).message,
+            code: (err as any).code,
+            sqlState: (err as any).sqlState,
+            sqlMessage: (err as any).sqlMessage
+          });
+        }
+        // Don't fail the entire request, just log the error
       }
+    } else {
+      console.log("No sessionId provided, skipping conversation context storage");
     }
 
     return NextResponse.json({ 
