@@ -18,16 +18,6 @@ async function getDB() {
   return db;
 }
 
-// Check if enhanced tables exist
-async function checkEnhancedTables(db: mysql.Pool) {
-  try {
-    const [tables] = await db.query("SHOW TABLES LIKE 'intent_patterns'");
-    return (tables as any[]).length > 0;
-  } catch (error) {
-    return false;
-  }
-}
-
 // Intent recognition function (only if enhanced tables exist)
 async function detectIntent(query: string, db: mysql.Pool) {
   try {
@@ -35,7 +25,13 @@ async function detectIntent(query: string, db: mysql.Pool) {
       "SELECT intent_name, patterns, responses, context_type, priority FROM intent_patterns WHERE is_active = TRUE ORDER BY priority ASC"
     );
     
-    const patternsList = patterns as any[];
+    const patternsList = patterns as Array<{
+      intent_name: string;
+      patterns: string;
+      responses: string;
+      context_type: string;
+      priority: number;
+    }>;
     
     for (const pattern of patternsList) {
       const regexPatterns = pattern.patterns.split('|');
@@ -81,7 +77,7 @@ async function handleServiceQuery(query: string, db: mysql.Pool) {
   try {
     // Check if software_services table exists
     const [services] = await db.query("SHOW TABLES LIKE 'software_services'");
-    if ((services as any[]).length > 0) {
+    if ((services as Array<{ [key: string]: string }>).length > 0) {
       // Enhanced service handling
       const serviceKeywords = {
         'web': 'Web Development',
@@ -116,8 +112,20 @@ async function handleServiceQuery(query: string, db: mysql.Pool) {
           [serviceCategory]
         );
         
-        if ((serviceData as any[]).length > 0) {
-          const serviceList = (serviceData as any[]).map(s => 
+        if ((serviceData as Array<{
+          name: string;
+          description: string;
+          base_price: number;
+          estimated_duration: string;
+          technologies: string;
+        }>).length > 0) {
+          const serviceList = (serviceData as Array<{
+            name: string;
+            description: string;
+            base_price: number;
+            estimated_duration: string;
+            technologies: string;
+          }>).map(s => 
             `• ${s.name}: ${s.description} (Starting at $${s.base_price}, ${s.estimated_duration})`
           ).join('\n');
           
@@ -130,7 +138,7 @@ async function handleServiceQuery(query: string, db: mysql.Pool) {
         "SELECT name, description FROM service_categories WHERE is_active = TRUE LIMIT 5"
       );
       
-      const categoryList = (categories as any[]).map(c => `• ${c.name}: ${c.description}`).join('\n');
+      const categoryList = (categories as Array<{ name: string; description: string }>).map(c => `• ${c.name}: ${c.description}`).join('\n');
       
       return `We offer the following software development services:\n${categoryList}\n\nWhat type of project do you have in mind? I can help you get a quote.`;
     }
@@ -147,7 +155,7 @@ async function handleJobQuery(query: string, db: mysql.Pool) {
   try {
     // Check if job_postings table exists
     const [jobs] = await db.query("SHOW TABLES LIKE 'job_postings'");
-    if ((jobs as any[]).length > 0) {
+    if ((jobs as Array<{ [key: string]: string }>).length > 0) {
       // Enhanced job handling
       const jobKeywords = {
         'frontend': 'Software Development',
@@ -178,7 +186,7 @@ async function handleJobQuery(query: string, db: mysql.Pool) {
       }
 
       let whereClause = "WHERE j.is_active = TRUE";
-      let params: any[] = [];
+      let params: (string | number)[] = [];
       
       if (jobCategory) {
         whereClause += " AND c.name = ?";
@@ -200,8 +208,22 @@ async function handleJobQuery(query: string, db: mysql.Pool) {
         params
       );
 
-      if ((jobData as any[]).length > 0) {
-        const jobList = (jobData as any[]).map(j => 
+      if ((jobData as Array<{
+        title: string;
+        company_name: string;
+        location: string;
+        job_type: string;
+        salary_range: string;
+        description: string;
+      }>).length > 0) {
+        const jobList = (jobData as Array<{
+          title: string;
+          company_name: string;
+          location: string;
+          job_type: string;
+          salary_range: string;
+          description: string;
+        }>).map(j => 
           `• ${j.title} at ${j.company_name} (${j.location})\n  ${j.job_type} • ${j.salary_range}\n  ${j.description.substring(0, 100)}...`
         ).join('\n\n');
         
@@ -221,14 +243,22 @@ async function handlePricingQuery(query: string, db: mysql.Pool) {
   try {
     // Check if software_services table exists
     const [services] = await db.query("SHOW TABLES LIKE 'software_services'");
-    if ((services as any[]).length > 0) {
+    if ((services as Array<{ [key: string]: string }>).length > 0) {
       if (query.toLowerCase().includes('website')) {
         const [websiteServices] = await db.query(
           "SELECT name, base_price, estimated_duration FROM software_services WHERE name LIKE '%website%' AND is_active = TRUE"
         );
         
-        if ((websiteServices as any[]).length > 0) {
-          const pricing = (websiteServices as any[]).map(s => 
+        if ((websiteServices as Array<{
+          name: string;
+          base_price: number;
+          estimated_duration: string;
+        }>).length > 0) {
+          const pricing = (websiteServices as Array<{
+            name: string;
+            base_price: number;
+            estimated_duration: string;
+          }>).map(s => 
             `• ${s.name}: Starting at $${s.base_price} (${s.estimated_duration})`
           ).join('\n');
           
@@ -241,7 +271,12 @@ async function handlePricingQuery(query: string, db: mysql.Pool) {
         "SELECT name, base_price, pricing_type, estimated_duration FROM software_services WHERE is_active = TRUE ORDER BY base_price ASC LIMIT 5"
       );
       
-      const pricingList = (allServices as any[]).map(s => 
+      const pricingList = (allServices as Array<{
+        name: string;
+        base_price: number;
+        pricing_type: string;
+        estimated_duration: string;
+      }>).map(s => 
         `• ${s.name}: ${s.pricing_type} pricing starting at $${s.base_price} (${s.estimated_duration})`
       ).join('\n');
       
@@ -290,8 +325,8 @@ export async function POST(req: NextRequest) {
           [query, query]
         );
 
-        if ((faqRows as any[]).length > 0) {
-          response = (faqRows as any[])[0].answer;
+        if ((faqRows as Array<{ answer: string; relevance: number }>).length > 0) {
+          response = (faqRows as Array<{ answer: string; relevance: number }>)[0].answer;
         } else {
           // 4. Generate AI response with context
           let contextInfo = "We offer software development services and job placement assistance.";
@@ -302,11 +337,11 @@ export async function POST(req: NextRequest) {
             );
             
             const [recentJobs] = await db.query(
-              "SELECT title, company_name FROM job_postings WHERE is_active = TRUE ORDER BY created_at DESC LIMIT 3"
+              "SELECT title, company_name FROM job_postings WHERE is_active = TRUE ORDER BY created_at DESC LIMIT 5"
             );
             
-            if ((recentServices as any[]).length > 0 || (recentJobs as any[]).length > 0) {
-              contextInfo = `Available services: ${(recentServices as any[]).map(s => s.name).join(', ')}. Recent job openings: ${(recentJobs as any[]).map(j => j.title).join(', ')}.`;
+            if ((recentServices as Array<{ name: string; description: string }>).length > 0 || (recentJobs as Array<{ title: string; company_name: string }>).length > 0) {
+              contextInfo = `Available services: ${(recentServices as Array<{ name: string; description: string }>).map(s => s.name).join(', ')}. Recent job openings: ${(recentJobs as Array<{ title: string; company_name: string }>).map(j => j.title).join(', ')}.`;
             }
           } catch (error) {
             console.log("Could not fetch enhanced context");
